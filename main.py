@@ -1,12 +1,36 @@
 import discord
-import requests
 import youtube_dl
 from discord.ext import commands,tasks
 import os
-from os import system
 import asyncio
+from dotenv import load_dotenv
 
 
+
+
+ytdl_format = {
+        'format': 'bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+    } 
+
+ffmpeg_options = {
+    'options':'-vn'
+}
+
+load_dotenv()
+DISCORD_TOKEN = os.getenv('pip install os-sys')
+
+ytdl = youtube_dl.YoutubeDL(ytdl_format)
+
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='!',intents=intents)
+
+"""
 class MyClient(discord.Client):
     async def on_ready(self):
         print(f'Logged on as {self.user}!')
@@ -21,56 +45,11 @@ class MyClient(discord.Client):
                 await message.channel.send(f'Sigaa disponível!'+ "\u2705");
             else:
                 await message.channel.send(f"Sigaa indisponivel"+"\u1F7E5")
-        elif message.content == "?play":
-            music = input()
-            self.play("play", music)
-    
-    def endSong(self, guild, path):
-        os.remove(path)         
-
-                 
 """
-async def play(self, ctx, url):
-        if not ctx.message.author.voice:
-            await ctx.send('you are not connected to a voice channel')
-            return
 
-        else:
-            channel = ctx.message.author.voice.channel
-
-        voice_client = await channel.connect()
-
-        guild = ctx.message.guild
-
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            file = ydl.extract_info(url, download=True)
-            path = str(file['title']) + "-" + str(file['id'] + ".mp3")
-
-        voice_client.play(url, after=lambda x: self.endSong(guild, path))
-        voice_client.source = discord.PCMVolumeTransformer(voice_client.source, 1)
-
-        await ctx.send(f'**Music: **{url}')
-"""
     
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'auto',
-    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
-}
+   
 
-ffmpeg_options = {
-    'options': '-vn'
-}
-
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5):
@@ -80,12 +59,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
         self.title = data.get('title')
         self.url = data.get('url')
-
+    
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=False):
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-
         if 'entries' in data:
             # take first item from a playlist
             data = data['entries'][0]
@@ -93,20 +71,71 @@ class YTDLSource(discord.PCMVolumeTransformer):
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
-    @commands.command(pass_context=True)
-    async def play(self, ctx, *, url):
-        print(url)
-        server = ctx.message.guild
-        voice_channel = server.voice_client
 
-        async with ctx.typing():
-            player = await YTDLSource.from_url(url, loop=self.bot.loop)
-            ctx.voice_channel.play(player, after=lambda e: print('Player error: %s' % e) if e else None)
-        await ctx.send('Now playing: {}'.format(player.title))
-        
 
-intents = discord.Intents.default()
-intents.message_content = True
+@bot.command(name = 'join')
+async def join(ctx):
+    if not ctx.message.author.voice:
+        await ctx.send(f"{ctx.message.author.name} is not connected to a voice channel")
+        return 
+    else:
+        channel = ctx.message.author.voice.channel
+        await channel.connect()
 
-client = MyClient(intents=intents)
-client.run('MTA1NDc3MDE4ODU3NjM1ODQzMA.GUBWG2.0WCxF-0x7x6JnjHCGFKXvQvFSce-DHOQ5qv7Vg')
+
+
+@bot.command(name= 'play')
+async def play(ctx,url):
+    server = ctx.message.guild
+    voice_channel = server.voice_client
+    async with ctx.typing():
+        filename = await YTDLSource.from_url(url,loop=bot.loop)
+        voice_channel.play(discord.FFmpegPCMAudio(executable="C:\WORKSPACE\Python\Discord_bot\ffmpeg",source=filename))
+    await ctx.send(f'**Now Playing:**{filename}')
+
+
+
+@bot.command(name='pause')
+async def pause(ctx):
+    voice_cliente = ctx.message.guild.voice_client
+    if voice_cliente.is_playing():
+        await voice_cliente.pause()
+    else:
+        await ctx.send("Pausa porque não tem música!")
+
+
+
+@bot.command(name='resume')
+async def resume(ctx):
+    voice_cliente = ctx.message.guild.voice_client
+    if voice_cliente.is_paused():
+        await voice_cliente.resume()
+    else:
+        await ctx.send("O bot não está tocando!")
+
+
+
+@bot.command(name='leave')
+async def leave(ctx):
+    voice_cliente = ctx.message.guild.voice_client
+    if voice_cliente.is_connected():
+        await voice_cliente.disconnect()
+    else:
+        await ctx.send("o bot não ingressou em um canal de voz! ")
+
+
+
+@bot.command(name='stop')
+async def resume(ctx):
+    voice_cliente = ctx.message.guild.voice_client
+    if voice_cliente.is_playing():
+        await voice_cliente.stop()
+    else:
+        await ctx.send("O bot não está tocando nada!")
+
+
+
+
+#client = MyClient(intents=intents)
+if __name__ == "__main__":
+    bot.run("MTA1NDc3MDE4ODU3NjM1ODQzMA.GgXU95.EMka3-IGFhlPKBBWFANZ7np3cvDPWtjfShdR-Q")
